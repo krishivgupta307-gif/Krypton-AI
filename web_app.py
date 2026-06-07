@@ -1,0 +1,207 @@
+import streamlit as st
+from langchain_ollama import OllamaLLM
+from langchain_core.prompts import ChatPromptTemplate
+from gtts import gTTS
+import io
+import os
+
+# --- 1. ALL 8 COLOR PALETTES IMPORTED DIRECTLY FROM YOUR CODE ---
+THEMES = {
+    "Vortex": {"bg_main": "#0f172a", "bg_sidebar": "#1e293b", "btn": "#3b82f6", "btn_hover": "#2563eb",
+               "user": "#3b82f6", "kry_label": "#60a5fa", "kry_text": "#22c55e"},
+    "Pyro": {"bg_main": "#1a0505", "bg_sidebar": "#2b0b0b", "btn": "#ef4444", "btn_hover": "#dc2626", "user": "#fef08a",
+             "kry_label": "#ef4444", "kry_text": "#eab308"},
+    "Terrashock": {"bg_main": "#051f0f", "bg_sidebar": "#064e3b", "btn": "#22c55e", "btn_hover": "#16a34a",
+                   "user": "#fef08a", "kry_label": "#22c55e", "kry_text": "#eab308"},
+    "Zephyr": {"bg_main": "#111827", "bg_sidebar": "#1f2937", "btn": "#06b6d4", "btn_hover": "#0891b2",
+               "user": "#67e8f9", "kry_label": "#eab308", "kry_text": "#ffffff"},
+    "Plasma": {"bg_main": "#1a0b2e", "bg_sidebar": "#2d1b4e", "btn": "#d946ef", "btn_hover": "#c026d3",
+               "user": "#f472b6", "kry_label": "#d946ef", "kry_text": "#e879f9"},
+    "Space": {"bg_main": "#070b14", "bg_sidebar": "#0f172a", "btn": "#6366f1", "btn_hover": "#4f46e5",
+              "user": "#818cf8", "kry_label": "#38bdf8", "kry_text": "#e0e7ff"},
+    "Void": {"bg_main": "#000000", "bg_sidebar": "#0a0a0a", "btn": "#333333", "btn_hover": "#555555", "user": "#a3a3a3",
+             "kry_label": "#ffffff", "kry_text": "#d4d4d4"},
+    "Heaven": {"bg_main": "#f8fafc", "bg_sidebar": "#f1f5f9", "btn": "#fbbf24", "btn_hover": "#f59e0b",
+               "user": "#2563eb", "kry_label": "#d97706", "kry_text": "#334155"}
+}
+
+# --- 2. INITIALIZE SESSION STATES ---
+if "messages" not in st.session_state:
+    st.session_state.messages = [{"role": "system", "content": "Welcome to Krypton V1.4"}]
+if "selected_theme" not in st.session_state:
+    st.session_state.selected_theme = "Vortex"
+if "personality" not in st.session_state:
+    st.session_state.personality = "def"
+if "tts_enabled" not in st.session_state:
+    st.session_state.tts_enabled = False
+if "speech_rate" not in st.session_state:
+    st.session_state.speech_rate = "Normal"
+if "accent_pack" not in st.session_state:
+    st.session_state.accent_pack = "English (US)"
+
+# --- 3. PAGE SETUP & THEME INJECTION ---
+st.set_page_config(page_title="Krypton Mobile", layout="wide")
+
+current_theme = THEMES[st.session_state.selected_theme]
+text_color = "#000000" if st.session_state.selected_theme == "Heaven" else "#ffffff"
+
+st.markdown(f"""
+    <style>
+        .stApp {{ background-color: {current_theme['bg_main']} !important; color: {current_theme['kry_text']} !important; }}
+        section[data-testid="stSidebar"] {{ background-color: {current_theme['bg_sidebar']} !important; }}
+        h1, h2, h3, label, .stMarkdown p {{ color: {text_color} !important; }}
+
+        .stSelectbox div[data-baseweb="select"] {{ background-color: {current_theme['bg_main']} !important; }}
+
+        div.stButton > button {{ 
+            background-color: {current_theme['btn']} !important; 
+            color: {text_color} !important; 
+            border: 1px solid {current_theme['btn_hover']} !important; 
+        }}
+        div.stButton > button:hover {{ 
+            background-color: {current_theme['btn_hover']} !important; 
+        }}
+
+        .stChatInputContainer textarea {{ 
+            background-color: {current_theme['bg_sidebar']} !important; 
+            color: {current_theme['kry_text']} !important; 
+            border: 1px solid {current_theme['btn']} !important; 
+        }}
+
+        .chat-header-user {{ color: {current_theme['user']}; font-weight: bold; margin-bottom: 2px; font-size: 18px; }}
+        .chat-header-kry {{ color: {current_theme['kry_label']}; font-weight: bold; margin-bottom: 2px; font-size: 18px; }}
+        .chat-text {{ color: {current_theme['kry_text']}; font-size: 18px; margin-bottom: 20px; font-family: "SF Pro", sans-serif; }}
+        .system-caption {{ color: {current_theme['btn_hover']}; font-style: italic; font-size: 14px; margin-bottom: 15px; }}
+    </style>
+""", unsafe_allow_html=True)
+
+# --- 4. MODEL BACKEND ---
+template = """Answer the question below.\nHere is the conversation history: {context}\nQuestion: {question}\nAnswer: """
+prompt_template = ChatPromptTemplate.from_template(template)
+model = OllamaLLM(model=st.session_state.personality)
+chain = prompt_template | model
+
+# --- 5. SIDEBAR NAVIGATION ---
+with st.sidebar:
+    col1, col2 = st.columns([0.22, 0.78])
+    with col1:
+        if os.path.exists("logo.jpg"):
+            st.image("logo.jpg", width=42)
+        else:
+            st.write("🤖")
+    with col2:
+        st.markdown(
+            f"<h1 style='margin:0; padding:0; font-size:26px; font-weight:bold; color:{current_theme['kry_label']} !important;'>KRYPTON</h1>",
+            unsafe_allow_html=True)
+
+    tabs = st.tabs(["Main", "Settings Config", "Actions"])
+
+    with tabs[0]:
+        st.session_state.tts_enabled = st.toggle("Enable TTS", value=st.session_state.tts_enabled)
+        st.session_state.speech_rate = st.selectbox("Speech Engine Speed:", ["Slow", "Normal", "Fast"],
+                                                    index=["Slow", "Normal", "Fast"].index(
+                                                        st.session_state.speech_rate))
+        st.session_state.accent_pack = st.selectbox("Language Pack Accents:",
+                                                    ["English (US)", "Indian English", "Hindi", "Spanish", "Tamil",
+                                                     "Telugu"],
+                                                    index=["English (US)", "Indian English", "Hindi", "Spanish",
+                                                           "Tamil", "Telugu"].index(st.session_state.accent_pack))
+
+    with tabs[1]:
+        persona_choice = st.selectbox("Personality Profile:", ["Default", "Chill", "Formal", "Brainstormer", "Chatty"])
+        persona_map = {"Default": "def", "Chill": "chill", "Formal": "formal", "Brainstormer": "idea", "Chatty": "chat"}
+        st.session_state.personality = persona_map[persona_choice]
+
+        theme_choice = st.selectbox("System Theme Color:", list(THEMES.keys()),
+                                    index=list(THEMES.keys()).index(st.session_state.selected_theme))
+        if theme_choice != st.session_state.selected_theme:
+            st.session_state.selected_theme = theme_choice
+            st.rerun()
+
+    with tabs[2]:
+        if st.button("Clear Chat", use_container_width=True):
+            st.session_state.messages = [{"role": "system", "content": "Chat logs reset successfully."}]
+            st.rerun()
+
+# --- 6. MAIN CHAT INTERFACE ---
+st.markdown(f"<h1 style='color:{current_theme['kry_label']} !important; font-weight:bold;'>Krypton AI</h1>",
+            unsafe_allow_html=True)
+
+context_str = ""
+for msg in st.session_state.messages:
+    if msg["role"] == "user":
+        context_str += f"\nUser: {msg['content']}"
+    elif msg["role"] == "assistant":
+        context_str += f"\nAI: {msg['content']}"
+
+for msg in st.session_state.messages:
+    if msg["role"] == "system":
+        st.markdown(f"<div class='system-caption'>System: {msg['content']}</div>", unsafe_allow_html=True)
+    elif msg["role"] == "user":
+        st.markdown(f"<div class='chat-header-user'>You:</div><div class='chat-text'>{msg['content']}</div>",
+                    unsafe_allow_html=True)
+    elif msg["role"] == "assistant":
+        st.markdown(f"<div class='chat-header-kry'>Krypton:</div><div class='chat-text'>{msg['content']}</div>",
+                    unsafe_allow_html=True)
+
+if user_input := st.chat_input("Message Krypton..."):
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    st.markdown(f"<div class='chat-header-user'>You:</div><div class='chat-text'>{user_input}</div>",
+                unsafe_allow_html=True)
+
+    st.markdown(f"<div class='chat-header-kry'>Krypton:</div>", unsafe_allow_html=True)
+    response_placeholder = st.empty()
+    full_response = ""
+
+    for chunk in chain.stream({"context": context_str, "question": user_input}):
+        full_response += chunk
+        response_placeholder.markdown(f"<div class='chat-text'>{full_response}▌</div>", unsafe_allow_html=True)
+    response_placeholder.markdown(f"<div class='chat-text'>{full_response}</div>", unsafe_allow_html=True)
+
+    st.session_state.messages.append({"role": "assistant", "content": full_response})
+
+    # Audio Rendering Processing Engine
+    if st.session_state.tts_enabled:
+        try:
+            # Base regional parameters configuration
+            lang_code = 'en'
+            tld_code = 'com'
+
+            chosen_accent = st.session_state.accent_pack
+            if chosen_accent == "English (US)":
+                lang_code = 'en'
+                tld_code = 'com'
+            elif chosen_accent == "Indian English":
+                lang_code = 'en'
+                tld_code = 'co.in'
+            elif chosen_accent == "Hindi":
+                lang_code = 'hi'
+                tld_code = 'co.in'
+            elif chosen_accent == "Spanish":
+                lang_code = 'es'
+                tld_code = 'es'
+            elif chosen_accent == "Tamil":
+                lang_code = 'ta'
+                tld_code = 'co.in'
+            elif chosen_accent == "Telugu":
+                lang_code = 'te'
+                tld_code = 'co.in'
+
+            # Native Engine Speed adjustments (Slow vs baseline Normal/Fast)
+            is_slow = True if st.session_state.speech_rate == "Slow" else False
+
+            # For "Fast", we pass a punctuation-compressed response string to native gTTS
+            # to make it talk in a faster, punchier rhythmic tempo without using pydub
+            text_to_speak = full_response
+            if st.session_state.speech_rate == "Fast":
+                text_to_speak = full_response.replace(", ", " ").replace("... ", " ")
+
+            tts = gTTS(text=text_to_speak, lang=lang_code, tld=tld_code, slow=is_slow)
+            audio_buffer = io.BytesIO()
+            tts.write_to_fp(audio_buffer)
+            audio_buffer.seek(0)
+
+            st.audio(audio_buffer, format="audio/mp3", autoplay=True)
+
+        except Exception as e:
+            st.error(f"TTS Engine Playback Failure: {e}")
