@@ -1,0 +1,6 @@
+1. Before launching Krpyton go to the terminal and type "ollama run llama3" in order to initiate the ollama llm
+
+2. To install a new .app file first in terminal type pip3 install pyinstaller, then in the terminal write
+  pyinstaller --noconsole --onefile --name="(APPS NAME)" --add-data "$(python -c 'import customtkinter; import os; print(os.path.dirname(customtkinter.__file__))'):customtkinter" (Files name.py)
+
+3. to run mobile version go into terminal and run           streamlit run web_app.py
